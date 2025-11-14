@@ -1,0 +1,146 @@
+{
+  "name": "Conditional Flow Example",
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "id": "http-request",
+      "name": "Fetch User Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300],
+      "parameters": {
+        "url": "https://api.example.com/user/123",
+        "method": "GET",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "if-condition",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.status }}",
+              "operation": "equal",
+              "value2": "active"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "active-user",
+      "name": "Active User Action",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [850, 200],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "action-1",
+              "name": "action",
+              "type": "string",
+              "value": "send_welcome_email"
+            },
+            {
+              "id": "action-2",
+              "name": "priority",
+              "type": "string",
+              "value": "high"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "inactive-user",
+      "name": "Inactive User Action",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [850, 400],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "action-1",
+              "name": "action",
+              "type": "string",
+              "value": "send_reactivation_email"
+            },
+            {
+              "id": "action-2",
+              "name": "priority",
+              "type": "string",
+              "value": "medium"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch User Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User Data": {
+      "main": [
+        [
+          {
+            "node": "Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status": {
+      "main": [
+        [
+          {
+            "node": "Active User Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Inactive User Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
