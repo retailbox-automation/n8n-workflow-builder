@@ -3,7 +3,7 @@
 ## 📍 Current Status: Foundation Phase
 
 **Created**: 2025-11-14
-**n8n Instance**: https://retailbox-n8n.zeabur.app
+**n8n Instance**: https://your-n8n-instance.com
 **Active Workflows**: 35 (23 active, 12 inactive)
 
 ---

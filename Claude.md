@@ -495,5 +495,5 @@ n8n workflows can be "token monsters" due to:
 
 **Project Status**: Active Development
 **Last Updated**: 2025-11-14
-**n8n Instance**: https://retailbox-n8n.zeabur.app
+**n8n Instance**: https://your-n8n-instance.com
 **Current Workflows**: 35 (23 active, 12 inactive)

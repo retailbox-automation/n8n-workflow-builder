@@ -153,7 +153,7 @@ n8n-workflow-builder/
 
 ## 📊 Current Status
 
-**Instance**: https://retailbox-n8n.zeabur.app
+**Instance**: https://your-n8n-instance.com
 **Workflows**: 35 total (23 active)
 **Phase**: Foundation Complete ✅
 **Next**: Core API Client (Phase 2)

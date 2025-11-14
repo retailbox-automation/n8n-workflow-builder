@@ -232,7 +232,7 @@ n8n-workflow-builder/
 ## 🔐 Current Environment
 
 ### n8n Instance
-- **URL**: https://retailbox-n8n.zeabur.app
+- **URL**: https://your-n8n-instance.com
 - **Status**: ✅ Active
 - **Workflows**: 35 total
   - Active: 23 (66%)
