@@ -1,0 +1,449 @@
+{
+  "name": "Client Segmentation - Upwork Contracts",
+  "nodes": [
+    {
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "id": "monday-get-items",
+      "name": "Monday.com - Get Items",
+      "type": "n8n-nodes-base.mondayCom",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "parameters": {
+        "resource": "board",
+        "operation": "getItems",
+        "boardId": "18373072729",
+        "limit": 25,
+        "columnIds": "name,text_mkxjf956,numeric_mkxk9mn5,date_mkxkd2ab,color_mkxj14bf",
+        "additionalFields": {
+          "columnValues": {
+            "columnId": "color_mkxkdqhd",
+            "columnValue": "[17]"
+          }
+        }
+      },
+      "credentials": {
+        "mondayComApi": {
+          "id": "mondaycom",
+          "name": "Monday.com API"
+        }
+      }
+    },
+    {
+      "id": "split-in-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [650, 300],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "http-get-updates",
+      "name": "HTTP Request - Get Updates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.monday.com/v2",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "mondayComApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "API-Version",
+              "value": "2024-10"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "=query { items(ids: [{{ $json.id }}]) { updates(limit: 50) { text_body created_at } } }"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "credentials": {
+        "mondayComApi": {
+          "id": "mondaycom",
+          "name": "Monday.com API"
+        }
+      }
+    },
+    {
+      "id": "code-merge-updates",
+      "name": "Code - Merge Updates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $('Monday.com - Get Items').first().json;\nconst updatesResponse = $input.first().json;\nconst updates = updatesResponse.data?.items[0]?.updates || [];\n\nreturn {\n  json: {\n    ...item,\n    updates_text: updates.map(u => u.text_body).join('\\n\\n')\n  }\n};"
+      }
+    },
+    {
+      "id": "monday-search-projects",
+      "name": "Monday.com - Search Projects",
+      "type": "n8n-nodes-base.mondayCom",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "parameters": {
+        "resource": "board",
+        "operation": "getItems",
+        "boardId": "1300635875",
+        "columnIds": "dropdown,industry__1,numbers",
+        "additionalFields": {
+          "columnValues": {
+            "columnId": "text_mkvntqdb",
+            "columnValue": "={{ $json.column_values.text_mkxjf956 }}"
+          }
+        }
+      },
+      "credentials": {
+        "mondayComApi": {
+          "id": "mondaycom",
+          "name": "Monday.com API"
+        }
+      }
+    },
+    {
+      "id": "code-prepare-ai-input",
+      "name": "Code - Prepare AI Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const contract = $input.first().json;\nconst projects = $('Monday.com - Search Projects').all();\n\nreturn {\n  json: {\n    contract_name: contract.name,\n    company: contract.column_values?.text_mkxjf956 || 'Unknown',\n    total_value: contract.column_values?.numeric_mkxk9mn5 || 0,\n    last_active: contract.column_values?.date_mkxkd2ab,\n    status: contract.column_values?.color_mkxj14bf?.text,\n    updates: contract.updates_text,\n    products: projects.map(p => p.json.column_values?.dropdown).filter(Boolean).join(', '),\n    item_id: contract.id\n  }\n};"
+      }
+    },
+    {
+      "id": "ai-agent-anthropic",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [1650, 300],
+      "parameters": {
+        "agent": "conversationalAgent",
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Segment Upwork contract into tiers:\n- Tier A (ID 5): $15K+ LTV, enterprise\n- Tier B (ID 1): $5-15K LTV\n- Tier C (ID 0): <$5K LTV\n\nPriority:\n- High (2): Active + Tier A/B + <30 days\n- Medium (0): Ended + Tier A/B + 30-90 days\n- Low (7): Tier C or 90-180 days\n- Skip (17): 180+ days\n\nRespond ONLY valid JSON:\n{\n  \"tier_id\": 5|1|0,\n  \"priority_id\": 2|0|7|17,\n  \"industry_id\": 2,\n  \"company_size_id\": 0,\n  \"recommended_package\": \"Primary: Name ($X)\\nRationale: reason\",\n  \"estimated_deal_size\": 18000,\n  \"follow_up_message\": \"\",\n  \"reasoning\": \"\"\n}"
+        }
+      },
+      "credentials": {}
+    },
+    {
+      "id": "chat-model-anthropic",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.8,
+      "position": [1650, 500],
+      "parameters": {
+        "model": "claude-sonnet-4.5-20250929",
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 4096
+        }
+      },
+      "credentials": {
+        "anthropicApi": {
+          "id": "anthropic",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "id": "code-parse-ai-response",
+      "name": "Code - Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const aiResponse = $input.first().json;\nlet text = aiResponse.text || aiResponse.message || aiResponse.content || aiResponse.output;\n\n// Remove markdown code blocks if present\ntext = text.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n\nlet segmentation;\ntry {\n  segmentation = JSON.parse(text);\n} catch (error) {\n  throw new Error(`Failed to parse AI response: ${error.message}\\nResponse: ${text}`);\n}\n\nreturn {\n  json: {\n    item_id: $('Code - Prepare AI Input').first().json.item_id,\n    segmentation: segmentation\n  }\n};"
+      }
+    },
+    {
+      "id": "monday-update-item",
+      "name": "Monday.com - Update Item",
+      "type": "n8n-nodes-base.mondayCom",
+      "typeVersion": 1,
+      "position": [2050, 300],
+      "parameters": {
+        "resource": "board",
+        "operation": "updateItem",
+        "boardId": "18373072729",
+        "itemId": "={{ $json.item_id }}",
+        "columnValues": "={{ JSON.stringify({\n  \"color_mkxkdqhd\": { \"index\": $json.segmentation.tier_id },\n  \"color_mkxkc8yn\": { \"index\": $json.segmentation.priority_id },\n  \"text_mkxk98e7\": $json.segmentation.recommended_package,\n  \"numeric_mkxkt1e0\": $json.segmentation.estimated_deal_size,\n  \"color_mkxk67wd\": { \"index\": $json.segmentation.industry_id },\n  \"color_mkxk6xef\": { \"index\": $json.segmentation.company_size_id },\n  \"long_text_mkxnqzp6\": $json.segmentation.follow_up_message\n}) }}"
+      },
+      "credentials": {
+        "mondayComApi": {
+          "id": "mondaycom",
+          "name": "Monday.com API"
+        }
+      }
+    },
+    {
+      "id": "if-error-handler",
+      "name": "IF - Error Handler",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2250, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "error-check",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "code-log-error",
+      "name": "Code - Log Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 200],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "console.error('Error processing item:', $json);\nreturn { json: $json };"
+      }
+    },
+    {
+      "id": "loop-back",
+      "name": "Loop Back",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2450, 400]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Monday.com - Get Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monday.com - Get Items": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Get Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Get Updates": {
+      "main": [
+        [
+          {
+            "node": "Code - Merge Updates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Merge Updates": {
+      "main": [
+        [
+          {
+            "node": "Monday.com - Search Projects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monday.com - Search Projects": {
+      "main": [
+        [
+          {
+            "node": "Code - Prepare AI Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Prepare AI Input": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code - Parse AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Parse AI Response": {
+      "main": [
+        [
+          {
+            "node": "Monday.com - Update Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Monday.com - Update Item": {
+      "main": [
+        [
+          {
+            "node": "IF - Error Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF - Error Handler": {
+      "main": [
+        [
+          {
+            "node": "Code - Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Back",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code - Log Error": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Back": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "client-segmentation",
+      "createdAt": "2025-11-14T00:00:00.000Z",
+      "updatedAt": "2025-11-14T00:00:00.000Z",
+      "id": "1"
+    },
+    {
+      "name": "monday-com",
+      "createdAt": "2025-11-14T00:00:00.000Z",
+      "updatedAt": "2025-11-14T00:00:00.000Z",
+      "id": "2"
+    },
+    {
+      "name": "ai-automation",
+      "createdAt": "2025-11-14T00:00:00.000Z",
+      "updatedAt": "2025-11-14T00:00:00.000Z",
+      "id": "3"
+    }
+  ],
+  "pinData": {},
+  "versionId": "1.0.0",
+  "triggerCount": 0,
+  "active": false
+}

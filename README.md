@@ -18,6 +18,12 @@
 - **[Simple Webhook](./examples/simple-webhook.json)** - Basic webhook example
 - **[Conditional Flow](./examples/conditional-flow.json)** - IF/ELSE pattern
 
+### Production Workflows
+- **[Client Segmentation](./workflows/client-segmentation.json)** - AI-powered Upwork contract analysis
+  - 📖 [Full Documentation](./workflows/CLIENT-SEGMENTATION-README.md)
+  - 🚀 [Quick Setup Guide](./workflows/QUICK-SETUP.md)
+  - ✨ Features: Monday.com integration, Claude AI, automated segmentation
+
 ## 🚀 Quick Start
 
 ### 1. Essential Links (Start Here!)
@@ -154,8 +160,9 @@ n8n-workflow-builder/
 ## 📊 Current Status
 
 **Instance**: https://retailbox-n8n.zeabur.app
-**Workflows**: 35 total (23 active)
+**Workflows**: 36 total (23 active)
 **Phase**: Foundation Complete ✅
+**New**: Client Segmentation Workflow (Production Ready) 🎯
 **Next**: Core API Client (Phase 2)
 
 ## 🔗 Important Links
